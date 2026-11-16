@@ -8,6 +8,14 @@ import noir from "./noir/theme.js";
 import retro from "./retro/theme.js";
 import y2k from "./y2k/theme.js";
 
-export const THEMES = [retro, edo, y2k, noir, deepsea, garden, cyber];
+// Theme packs installed separately into this folder (themes/<id>/theme.js), added after the
+// shipped ones when present. A missing pack is skipped.
+const OPTIONAL = ["crawler"];
+const extra = [];
+for (const id of OPTIONAL) {
+  try { extra.push((await import(`./${id}/theme.js`)).default); } catch {}
+}
+
+export const THEMES = [retro, edo, y2k, noir, deepsea, garden, cyber, ...extra];
 export const DEFAULT_THEME = "retro";
 export const themeById = (id) => THEMES.find((t) => t.id === id) ?? THEMES.find((t) => t.id === DEFAULT_THEME);

@@ -3,12 +3,17 @@
 
 import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { agents, terminals, spaces, machines, run, setAgentOrder, layout, shared, setShared, theme, openOverlay, closeOverlay, props } from "herdr";
+import { agents, terminals, spaces, machines, run, setAgentOrder, layout, shared, setShared, theme, openOverlay, closeOverlay, props, hc, focused, notify, nextCommand } from "herdr";
 import { webcrypto } from "crypto";
-import { THEMES, themeById } from "./themes/index.js";
+import { activeTheme, publish, applyTheme } from "./themes/sync.js";
+import { THEMES } from "./themes/index.js";
 
-const THEME_KEY = "herdr-critters.theme";
-const activeTheme = () => themeById(shared(THEME_KEY));
+// A theme is dark when its background is.
+const isDark = (look) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(look.colors.bg.slice(i, i + 2), 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b < 128;
+};
+const THEME_ROW = 26;
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -69,14 +74,111 @@ const groupIdOf = (a) => (groupBy() === "space" ? `space:${a.space}` : `machine:
 // (retro keeps "names" so current users keep their names).
 const namesKey = (look) => look.namesKey ?? `names.${look.id}`;
 
+// Every agent's one fixed name, whatever the look: shared state (address -> name), drawn
+// from every theme's names. Each name is also put on the agent's terminal as the label
+// NAME_LABEL, so agents can find each other by it (`critter onyx`, `hc ls --label ...`).
+const NAMES_KEY = "critters.names";
+const NAME_LABEL = "herdr.critter";
+// The name the agents list shows right now, when a theme shows its cast's names instead of the
+// fixed one (crawler shows "carl"): also a label, so `critter carl` finds it too.
+const SHOWN_LABEL = "herdr.critter.shown";
+const SHOWN_KEY = "critters.shown";
+const NAME_POOL = [...new Set(THEMES.flatMap((t) => t.names))];
+// Names an agent had before names were fixed (retro's), kept when free.
+const LEGACY_KEY = "names";
+
 // The art files' type: "svg" by default, "png" for a theme drawn as raster art.
 const artExt = (look) => look.artExt ?? "svg";
 
+// A picked critter is one of the theme's own names, or "<theme>:<name>" borrowed from another
+// theme once the theme's own are all taken (crawler has 11). Past every critter of every theme
+// a name repeats with a number ("carl 2"), drawn with the same art.
+const critterName = (picked) => (picked ?? "").split(":").pop().replace(/ \d+$/, "");
+function critterArt(picked, look) {
+  const [id, name] = (picked ?? "").includes(":") ? picked.split(":") : [null, picked];
+  const from = (id && THEMES.find((t) => t.id === id)) || look;
+  return { art: from.art, ext: artExt(from), name: (name ?? "").replace(/ \d+$/, "") };
+}
+
 export default class RetroAgents extends View {
-  init() {
+  init(_props, cx) {
     this.hovered = null;
     this.look = null;
     this.picked = {};
+    if (props()?.menu || props()?.themes) return; // popups: no names to keep
+    this.labelled = {}; // address -> the names its terminal's labels carry ("fixed|shown")
+    this.wanted = new Map(); // address -> [fixed name, shown name]
+    cx.timer.every(2000, (cx) => this.syncLabels(cx));
+    // "herdr-critters.attention" (keys.json): show the next agent that needs you.
+    cx.spawn(async (cx) => {
+      for (;;) {
+        const c = await nextCommand();
+        if (c === "attention") this.nextAttention();
+        cx.notify();
+      }
+    });
+  }
+
+  // The next agent waiting on you (blocked), else the next that finished (done), in the
+  // agents list's order, starting after the one shown now; pressed again, it moves on.
+  nextAttention() {
+    const list = this.order?.length ? this.order.map((ad) => agents().find((a) => a.address === ad)).filter(Boolean) : agents();
+    const now = focused()?.agent;
+    const pick = (status) => {
+      const due = list.filter((a) => a.status === status);
+      if (!due.length) return null;
+      const at = due.findIndex((a) => a.address === now);
+      return due[(at + 1) % due.length];
+    };
+    const a = pick("blocked") ?? pick("done");
+    if (a) run("agent.focus", { terminal: a.address });
+    else notify({ title: "Nobody needs you", body: "No agent is waiting on you or has just finished.", timeout: 2500 });
+  }
+
+  // One fixed name per agent from every theme's names, never two the same. An agent keeps
+  // its name; a new one takes its old retro name when free, else a random free one.
+  nicknames(list) {
+    const fixed = { ...(shared(NAMES_KEY) ?? {}) };
+    const legacy = JSON.parse(localStorage.getItem(LEGACY_KEY) ?? "{}");
+    const out = new Map();
+    const taken = new Set();
+    let dirty = false;
+    // Agents that already have a name go first, so a newcomer never takes it.
+    const ordered = [...list.filter((a) => fixed[a.address]), ...list.filter((a) => !fixed[a.address])];
+    for (const a of ordered) {
+      let name = fixed[a.address];
+      if (!name || taken.has(name)) {
+        const old = legacy[a.address];
+        const free = NAME_POOL.filter((n) => !taken.has(n));
+        name = old && NAME_POOL.includes(old) && !taken.has(old) ? old : pickRandom(free.length ? free : NAME_POOL);
+        fixed[a.address] = name;
+        dirty = true;
+      }
+      // Only past every name in the pool: the same name again, with a number.
+      let unique = name;
+      for (let n = 2; taken.has(unique); n++) unique = `${name}${n}`;
+      taken.add(unique);
+      out.set(a.address, unique);
+    }
+    if (dirty) setShared(NAMES_KEY, fixed);
+    return out;
+  }
+
+  // Put each agent's name on its terminal as a label; only changes are written.
+  syncLabels(cx) {
+    if (this.syncing) return;
+    const todo = [...this.wanted].filter(([address, [name, shown]]) => this.labelled[address] !== `${name}|${shown}`);
+    if (!todo.length) return;
+    this.syncing = true;
+    cx.spawn(async () => {
+      for (const [address, [name, shown]] of todo) {
+        try {
+          const r = await hc(["label", address, `${NAME_LABEL}=${name}`, `${SHOWN_LABEL}=${shown}`]);
+          if (r.code === 0) this.labelled[address] = `${name}|${shown}`;
+        } catch {}
+      }
+      this.syncing = false;
+    });
   }
 
   // The status entry for an agent's word; an unknown word reads as idle.
@@ -96,22 +198,40 @@ export default class RetroAgents extends View {
     this.picked = JSON.parse(localStorage.getItem(namesKey(look)) ?? "{}");
   }
 
-  // One name from the theme's names per agent, never two the same: an agent keeps its picked
-  // name while no earlier agent holds it, else gets a random free one.
-  names(list) {
+  // Which critter draws each agent (its sprite), never two the same: the agent's own fixed
+  // name when this theme has art for it, else the critter it had here before while free, else
+  // a random free one of this theme's, else (all taken) one borrowed from another theme.
+  // The name shown is the fixed one, or the critter's when the theme sets `castNames`.
+  sprites(list, nick) {
     const out = new Map();
     const taken = new Set();
     const NAMES = this.look.names;
     let dirty = false;
+    // Agents whose own name has art here claim it first.
+    const own = list.filter((a) => NAMES.includes(nick.get(a.address)));
+    for (const a of own) {
+      const name = nick.get(a.address);
+      if (taken.has(name)) continue;
+      if (this.picked[a.address] !== name) { this.picked[a.address] = name; dirty = true; }
+      taken.add(name);
+      out.set(a.address, name);
+    }
     for (const a of list) {
+      if (out.has(a.address)) continue;
       let name = this.picked[a.address];
-      if (!name || !NAMES.includes(name) || taken.has(name)) {
-        const free = NAMES.filter((n) => !taken.has(n));
-        name = pickRandom(free.length ? free : NAMES);
+      const borrowed = (n) => n?.includes(":") && THEMES.some((t) => t.id === n.split(":")[0] && t.names.includes(n.split(":")[1]));
+      const free = NAMES.filter((n) => !taken.has(n));
+      // A borrowed critter goes back once one of the theme's own is free again.
+      if (!name || !(NAMES.includes(name) || (borrowed(name) && !free.length)) || taken.has(name)) {
+        const shown = new Set([...taken].map(critterName));
+        const others = THEMES.filter((t) => t.id !== this.look.id)
+          .flatMap((t) => t.names.filter((n) => !NAMES.includes(n) && !shown.has(n)).map((n) => `${t.id}:${n}`))
+          .filter((n) => !taken.has(n));
+        name = pickRandom(free.length ? free : others.length ? others : NAMES);
         this.picked[a.address] = name;
         dirty = true;
       }
-      // Only past 30 agents: the same name again, with a number.
+      // Only past every critter of every theme: the same name again, with a number.
       let unique = name;
       for (let n = 2; taken.has(unique); n++) unique = `${name} ${n}`;
       taken.add(unique);
@@ -124,15 +244,18 @@ export default class RetroAgents extends View {
   // The sprite box: scene, sprite, and the corner badge that tells the state at a glance.
   // `name` is the agent's picked name: each name has its own sprite.
   stage(a, scene, w, h, name) {
-    const { art, colors: C, status: STATUS } = this.look;
-    const ext = artExt(this.look);
+    const { colors: C, status: STATUS } = this.look;
+    const { art, ext, name: file } = critterArt(name, this.look);
     const st = a.status;
-    const spriteW = Math.round(w * 0.66);
+    // A theme can set how big its sprites draw (share of the box width) and where their feet
+    // land (share of the box height above the bottom); by default 66%, on the scene's ground,
+    // its bottom 7 of 30 rows.
+    const S = this.look.sprite ?? {};
+    const spriteW = Math.round(w * (S.size ?? 0.66));
     const spriteH = Math.round(spriteW * 0.8);
     const left = Math.round((w - spriteW) / 2);
-    // Feet on the bricks: the scene's ground is its bottom 7 of 30 rows.
-    const top = h - Math.round(h * (7 / 30)) - spriteH + 2;
-    const sprite = image(`${art}/sprite-${name}-${STATUS[st] ? st : "idle"}.${ext}`).absolute().left(left).top(top).w(spriteW).h(spriteH);
+    const top = h - Math.round(h * (S.ground ?? 7 / 30)) - spriteH + 2;
+    const sprite = image(`${art}/sprite-${file}-${STATUS[st] ? st : "idle"}.${ext}`).absolute().left(left).top(top).w(spriteW).h(spriteH);
     const badge = div()
       .absolute()
       .top(3)
@@ -144,8 +267,8 @@ export default class RetroAgents extends View {
       .bg(C.badgeBg)
       .border(1)
       .border_color(st === "idle" ? C.idleEdge : this.statusOf(st).color);
+    // Idle has no corner mark: a sprite shows its own sleepiness (z's drawn into the art).
     const mark = {
-      idle: () => this.pixel(div(), 9, C.idleMark).frames(["z", "z", "Z", "Z"], 450),
       working: () => this.pixel(div(), 9, STATUS.working.color).frames(["▘", "▝", "▗", "▖"], 140),
       blocked: () => this.pixel(div(), 10, STATUS.blocked.color).child("!").loop("opacity", { from: 0.25, to: 1, period: 700 }),
       done: () => div().text_size(10).font_bold().text_color(STATUS.done.color).child("✓"),
@@ -160,7 +283,7 @@ export default class RetroAgents extends View {
       .border_color(st === "idle" ? scene.box : this.statusOf(st).color + C.statusEdgeAlpha)
       .child(image(`${art}/scene-${STATUS[st] ? st : "idle"}.${ext}`).absolute().left(0).top(0).w(w - 4).h(h - 4))
       .child(st === "working" ? sprite.loop("top", { from: top, to: top - 3, period: 520 }) : sprite)
-      .child(badge.child(mark()));
+      .when(st !== "idle", (el) => el.child(badge.child(mark())));
   }
 
   // A small icon button on a card; a click does `act` and not the card's own click.
@@ -259,6 +382,55 @@ export default class RetroAgents extends View {
       .child(item("pin", a.pinned ? "UNPIN" : "PIN TO TOP", () => run("terminal.pin", { terminal: a.address, pinned: !a.pinned })))
       .child(item("card", isSet(COMPACT_KEY, a.address) ? "EXPAND CARD" : "COLLAPSE CARD", () => toggle(COMPACT_KEY, a.address)))
       .child(item("group", isSet(COLLAPSED_KEY, group) ? "SHOW GROUP" : "COLLAPSE GROUP", () => toggle(COLLAPSED_KEY, group)));
+  }
+
+  // The theme list: a popup just under the theme button.
+  // Where the button is, from the press (a click event carries no position).
+  anchorThemes(e) {
+    const p = e?.position, l = e?.local_position;
+    this.themesAt = p && l ? { x: p.x - l.x, y: p.y - l.y + 18 } : null;
+  }
+
+  openThemes() {
+    const at = this.themesAt ?? "pointer";
+    openOverlay({ mod: "herdr-critters", kind: "popup", frame: "none", width: 220, height: THEMES.length * THEME_ROW + 12, at, props: { themes: true } });
+  }
+
+  // Every theme: a swatch of its colors, its name in its own font, dark or light, a check on the shown one.
+  themeMenu() {
+    const { colors: C } = this.look;
+    const close = () => closeOverlay(props().overlay);
+    const row = (t) => {
+      const on = t.id === this.look.id;
+      const scene = t.scenes[t.localScene];
+      return h_flex()
+        .id(`theme-${t.id}`)
+        .h(THEME_ROW)
+        .px(6)
+        .gap(8)
+        .items_center()
+        .cursor_pointer()
+        .when(on, (el) => el.bg(C.divider))
+        .hover((el) => el.bg(C.divider))
+        .on_click(() => {
+          close();
+          if (!on) applyTheme(t);
+        })
+        .child(h_flex().flex_none().w(30).h(14).border(1).border_color(C.btnEdge)
+          .child(div().flex_1().h_full().bg(t.colors.bg))
+          .child(div().flex_1().h_full().bg(scene.card))
+          .child(div().flex_1().h_full().bg(t.colors.focus)))
+        .child(div().flex_1().min_w(0).truncate().font_family(t.fonts.pixel).text_size(11).text_color(on ? C.text : C.sub).child(t.label))
+        .child(this.pixel(div(), 8, C.head).flex_none().child(isDark(t) ? "DARK" : "LIGHT"))
+        .child(div().flex_none().w(10).text_size(11).text_color(C.focus).child(on ? "✓" : ""));
+    };
+    return v_flex()
+      .size_full()
+      .p(4)
+      .bg(C.bg)
+      .border(2)
+      .border_color(C.btnEdge)
+      .children(THEMES.map(row));
   }
 
   pinButton(a) {
@@ -383,7 +555,9 @@ export default class RetroAgents extends View {
 
   render() {
     const look = activeTheme();
+    publish(look);
     this.useTheme(look);
+    if (props()?.themes) return this.themeMenu();
     if (props()?.menu) return this.menu(props().menu);
     const { art, colors: C, status: STATUS } = look;
     const ext = artExt(look);
@@ -415,8 +589,15 @@ export default class RetroAgents extends View {
     for (const g of groups) g.members = [...g.members.filter((a) => a.pinned), ...g.members.filter((a) => !a.pinned)];
     const list = groups.flatMap((g) => g.members);
     setAgentOrder(list.map((a) => a.address));
+    this.order = list.map((a) => a.address);
 
-    const names = this.names(list);
+    const fixed = this.nicknames(list);
+    const drawn = this.sprites(list, fixed);
+    // The name each card shows: the fixed one, or with `castNames` the critter's (its cast).
+    const names = new Map(list.map((a) => [a.address, look.castNames ? critterName(drawn.get(a.address)) : fixed.get(a.address)]));
+    this.wanted = new Map(list.map((a) => [a.address, [fixed.get(a.address), names.get(a.address)]]));
+    const shownNow = Object.fromEntries(names);
+    if (JSON.stringify(shared(SHOWN_KEY) ?? {}) !== JSON.stringify(shownNow)) setShared(SHOWN_KEY, shownNow);
     if (narrow()) return this.rail(list, sceneOf);
 
     const all = terminals();
@@ -450,8 +631,16 @@ export default class RetroAgents extends View {
           .child(h_flex().flex_1().min_w(0).overflow_hidden().gap(5).items_center()
             .child(image(`${art}/icon-dither.${ext}`).size(12).flex_none())
             .child(this.pixel(div(), 11, C.head).flex_none().child("AGENTS"))
-            .child(this.headerButton("critters-group", "Group agents by machine or by space", () => setShared(GROUP_KEY, bySpace ? "machine" : "space"), bySpace ? "BY SPACE" : "BY MACHINE"))
-            .child(this.headerButton("critters-theme", "Switch the look of the cards", () => setShared(THEME_KEY, THEMES[(THEMES.indexOf(look) + 1) % THEMES.length].id), look.label)))
+            .child(this.headerButton("critters-group", bySpace ? "Grouped by space (click: by machine)" : "Grouped by machine (click: by space)",
+              () => setShared(GROUP_KEY, bySpace ? "machine" : "space"),
+              svg(`mods/workspace-chrome/${bySpace ? "layers" : "monitor"}.svg`).size(10)))
+            .child(this.headerButton("critters-theme", "Choose the look of Herdr", () => this.openThemes(),
+                h_flex().min_w(0).gap(2).items_center()
+                  .child(div().min_w(0).truncate().child(look.label))
+                  .child(svg("mods/workspace-chrome/chevron-down.svg").size(9).flex_none()))
+              .flex_shrink(1)
+              .min_w(24)
+              .on_mouse_down("left", (e) => this.anchorThemes(e))))
           .child(this.pixel(div(), 11, busy ? STATUS.working.color : C.head).flex_none().child(`${busy} ${STATUS.working.word}`)),
       )
       .when(list.length === 0, (el) =>

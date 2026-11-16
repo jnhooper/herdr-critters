@@ -34,6 +34,15 @@ export default {
   },
   localScene: "fuji",
   remoteScenes: ["sakura", "take", "kaki"],
+  // Herdr's matching theme (themes/critters-edo.json, made by tools/build-herdr-themes.mjs).
+  // Panel colors come from the colors and scenes above; `ansi` is the terminal's 16 colors,
+  // `colors` (optional) overrides any Herdr theme color by name.
+  herdr: {
+    ansi: [
+      "#1e2a44", "#c23b22", "#4f7a2e", "#a8741a", "#2d5a86", "#8a3a6a", "#2e7a7a", "#8a7a5e",
+      "#6e6452", "#d8502e", "#5f8f36", "#c08a20", "#3a6ea0", "#a8507e", "#3a9090", "#efe6d0",
+    ],
+  },
   status: {
     working: { word: "BUSY", color: "#2d5a86" },
     blocked: { word: "HELP!", color: "#c8302a" },

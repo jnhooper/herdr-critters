@@ -33,6 +33,15 @@ export default {
   },
   localScene: "greenhouse",
   remoteScenes: ["barrow", "seeds", "pond"],
+  // Herdr's matching theme (themes/critters-garden.json, made by tools/build-herdr-themes.mjs).
+  // Panel colors come from the colors and scenes above; `ansi` is the terminal's 16 colors,
+  // `colors` (optional) overrides any Herdr theme color by name.
+  herdr: {
+    ansi: [
+      "#3b3226", "#cc3b3b", "#3d8b37", "#b87400", "#2f7aa8", "#7a5aa8", "#3a8a80", "#9a9480",
+      "#7a6e58", "#e05a5a", "#4fa848", "#d08c10", "#4a94c0", "#9478c0", "#4aa89c", "#f6f1e0",
+    ],
+  },
   status: {
     working: { word: "GROW", color: "#b87400" },
     blocked: { word: "WILT!", color: "#cc3b3b" },

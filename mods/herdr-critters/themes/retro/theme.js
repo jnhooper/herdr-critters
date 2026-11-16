@@ -34,6 +34,15 @@ export default {
   },
   localScene: "dusk",
   remoteScenes: ["den", "dawn", "moss"],
+  // Herdr's matching theme (themes/critters-retro.json, made by tools/build-herdr-themes.mjs).
+  // Panel colors come from the colors and scenes above; `ansi` is the terminal's 16 colors,
+  // `colors` (optional) overrides any Herdr theme color by name.
+  herdr: {
+    ansi: [
+      "#12131b", "#ff5a5a", "#9be36a", "#ffd35a", "#6c8cff", "#c77dff", "#5ee6f2", "#d8d2ee",
+      "#6b6f82", "#ff8a8a", "#b8f08a", "#ffe38a", "#9ab0ff", "#dca8ff", "#9af2f8", "#f1ecff",
+    ],
+  },
   status: {
     working: { word: "BUSY", color: "#5ee6f2" },
     blocked: { word: "HELP!", color: "#ff5a5a" },

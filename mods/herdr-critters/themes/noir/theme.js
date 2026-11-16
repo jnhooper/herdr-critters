@@ -35,6 +35,15 @@ export default {
   localScene: "office",
   remoteScenes: ["alley", "precinct", "records"],
   // Told apart by value (dim, mid, bright) and the one red.
+  // Herdr's matching theme (themes/critters-noir.json, made by tools/build-herdr-themes.mjs).
+  // Panel colors come from the colors and scenes above; `ansi` is the terminal's 16 colors,
+  // `colors` (optional) overrides any Herdr theme color by name.
+  herdr: {
+    ansi: [
+      "#101012", "#e0303c", "#9aa88a", "#c8b896", "#8a9cb0", "#a88a9a", "#9fb0bc", "#c8c3b6",
+      "#5a5a60", "#ff5a64", "#b8c4a8", "#e4d4b0", "#a8b8c8", "#c4a8b8", "#bccad4", "#f4f1e8",
+    ],
+  },
   status: {
     working: { word: "SNOOP", color: "#f4f1e8" },
     blocked: { word: "HEAT!", color: "#e0303c" },

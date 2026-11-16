@@ -33,6 +33,15 @@ export default {
   },
   localScene: "neon",
   remoteScenes: ["ice", "acid", "amber"],
+  // Herdr's matching theme (themes/critters-cyber.json, made by tools/build-herdr-themes.mjs).
+  // Panel colors come from the colors and scenes above; `ansi` is the terminal's 16 colors,
+  // `colors` (optional) overrides any Herdr theme color by name.
+  herdr: {
+    ansi: [
+      "#07060d", "#ff2e63", "#39ff14", "#ffc05a", "#4a7aff", "#ff2bd6", "#00f0ff", "#b8b0e0",
+      "#6a5f8a", "#ff6a8e", "#8aff6a", "#ffd88a", "#7a9aff", "#ff7ae8", "#7af4ff", "#e8f6ff",
+    ],
+  },
   status: {
     working: { word: "HACK", color: "#00f0ff" },
     blocked: { word: "PING!", color: "#ff2e63" },

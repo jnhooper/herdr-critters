@@ -34,6 +34,15 @@ export default {
   },
   localScene: "abyss",
   remoteScenes: ["reef", "vent", "trench"],
+  // Herdr's matching theme (themes/critters-deepsea.json, made by tools/build-herdr-themes.mjs).
+  // Panel colors come from the colors and scenes above; `ansi` is the terminal's 16 colors,
+  // `colors` (optional) overrides any Herdr theme color by name.
+  herdr: {
+    ansi: [
+      "#070b18", "#ff4f8b", "#6bffb0", "#ffc08a", "#5a8cff", "#d77aff", "#3ff0ff", "#c8d8f4",
+      "#5a6a92", "#ff7aa8", "#9fffd8", "#ffd8b0", "#8ab0ff", "#ffb8f4", "#7ffcff", "#e6f6ff",
+    ],
+  },
   status: {
     working: { word: "DIVE", color: "#3ff0ff" },
     blocked: { word: "SOS!", color: "#ff4f8b" },

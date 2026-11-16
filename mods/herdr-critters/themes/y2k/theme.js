@@ -35,6 +35,15 @@ export default {
   localScene: "bliss",
   remoteScenes: ["ocean", "sunset", "grape"],
   // Chat-speak of the time.
+  // Herdr's matching theme (themes/critters-y2k.json, made by tools/build-herdr-themes.mjs).
+  // Panel colors come from the colors and scenes above; `ansi` is the terminal's 16 colors,
+  // `colors` (optional) overrides any Herdr theme color by name.
+  herdr: {
+    ansi: [
+      "#0b2545", "#e0115f", "#2c9e1a", "#b07a00", "#1e7bff", "#8a3ad6", "#0a8fd6", "#8a9bb0",
+      "#4f6585", "#ff3d7f", "#3cb82a", "#d09a10", "#4a95ff", "#a860f0", "#20a8e8", "#dde5ee",
+    ],
+  },
   status: {
     working: { word: "SYNC", color: "#0a8fd6" },
     blocked: { word: "OMG!", color: "#e0115f" },
