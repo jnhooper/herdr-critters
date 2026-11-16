@@ -10,6 +10,8 @@ home="${HERDR_APP_HOME:-$HOME/.config/herdr-app}"
 for mod in "$repo"/mods/*/; do
   name="$(basename "$mod")"
   mkdir -p "$home/mods/$name"
+  # mod.json first: a mod folder without one gets placed in the window by Herdr.
+  cp "$mod/mod.json" "$home/mods/$name/mod.json"
   # A theme pack installed separately (themes/<id> not in this repo) is kept.
   rsync -a --delete --filter="P /themes/*/" --exclude jsconfig.json --exclude gpui-kit.d.ts "$mod" "$home/mods/$name/"
   herdr-app check "$home/mods/$name"

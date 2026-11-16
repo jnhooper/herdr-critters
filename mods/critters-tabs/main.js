@@ -1,7 +1,6 @@
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { spaces, panes, run, openOverlay, theme, window, shared, layout, settings, nextCommand, focused, readTextFile, appHome } from "herdr";
-import { TuicrChanges } from "./tuicr.js";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -28,7 +27,7 @@ function firstMod(node) {
 //   "panel": { "label": "Server", "icon": "server.svg", "dot": "devserver.dot" }
 // icon is a file in the mod's folder; dot names a shared key the mod sets to a theme color
 // name ("done", "working", ...) to show a small dot on the button, or null for none.
-// A child with no mod (a terminal block, like tuicr's Changes) uses the mod named by its id.
+// A child with no mod (a terminal block) uses the mod named by its id.
 // Herdr's own Files and Changes can't carry that section, so they're known here, and they follow
 // the person's panel choice in Herdr's settings (shared "workspace.panels").
 const SHIPPED = {
@@ -46,9 +45,7 @@ function panelsOf(root) {
 export default class Tabs extends View {
   init(_props, cx) {
     this.pressed = null;
-    // The Changes slot shows tuicr for the shown space (see tuicr.js).
-    this.tuicr = new TuicrChanges();
-    cx.timer.every(700, (cx) => { this.tuicr.tick(cx); this.loadMeta(cx); });
+    cx.timer.every(700, (cx) => this.loadMeta(cx));
     this.meta = { ...SHIPPED };
     this.panels = JSON.parse(localStorage.getItem("panels") ?? "{}");
     this.loadMeta(cx);
@@ -83,7 +80,8 @@ export default class Tabs extends View {
         const p = json.panel ?? {};
         this.meta[mod] = {
           label: p.label ?? json.title ?? mod,
-          icon: p.icon ? `mods/${mod}/${p.icon}` : null,
+          // A file in the mod's folder, or a path from the app home ("mods/changes/changes.svg").
+          icon: !p.icon ? null : p.icon.startsWith("mods/") ? p.icon : `mods/${mod}/${p.icon}`,
           dot: p.dot ?? null,
         };
         this.loading.delete(mod);
@@ -93,12 +91,11 @@ export default class Tabs extends View {
   }
 
   // Open the side panel on `id`, or close it if it's already showing `id`. A panel that is a
-  // terminal block (tuicr's Changes) takes the keyboard, so its keys work straight away.
+  // terminal block takes the keyboard, so its keys work straight away.
   togglePanel(id) {
     const root = layout(), panel = find(root, "panel"), body = find(root, "panel-body");
     if (panel && !panel.hidden && body?.active === id) { run("layout.hide", { id: "panel" }); return; }
     run("layout.select", { stack: "panel-body", child: id }); run("layout.show", { id: "panel" });
-    if (id === "changes") this.tuicr.last = null; // a fresh snapshot if the worktree changed
     const t = find(layout(), id)?.content?.terminal;
     if (t) run("pane.focus", { terminal: t });
   }
