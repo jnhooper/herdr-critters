@@ -113,7 +113,17 @@
                   "gap": 8,
                   "lone": true
                 }
-              }
+              },
+              "floating": [
+                {
+                  "id": "collapsed",
+                  "content": {
+                    "mod": "pane-collapse"
+                  },
+                  "edge": "bottom",
+                  "align": "end"
+                }
+              ]
             },
             {
               "id": "panel",
@@ -179,5 +189,6 @@
   "traffic_lights": [
     12,
     16
-  ]
+  ],
+  "terminal_menu": "pane-collapse-menu"
 }

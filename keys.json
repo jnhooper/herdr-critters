@@ -1,0 +1,10 @@
+{
+  "layout:critters": {
+    "cmd-shift-a": "herdr-critters.attention",
+    "cmd-shift-e": "critters-tabs.files",
+    "cmd-shift-g": "critters-tabs.changes",
+    "cmd-shift-backspace": "critters-tabs.remove",
+    "cmd-shift-c": "pane-collapse.collapse",
+    "cmd-shift-o": "pane-collapse.expand"
+  }
+}
