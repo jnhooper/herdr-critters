@@ -2,9 +2,24 @@
 
 # herdr-critters
 
-A Herdr desktop app mod: the Agents sidebar as cards with a critter for each
-agent. The look is a theme: retro pixel art, an Edo woodblock print, glossy
-Y2K or neon cyberpunk.
+A Herdr desktop app layout: the Agents sidebar as cards with a critter for each
+agent, plus Spaces, tabs and menus restyled to match. The look is a theme:
+retro pixel art, an Edo woodblock print, glossy Y2K, neon cyberpunk, and more.
+Each one carries its matching Herdr theme, so one switch recolors the whole window.
+
+A fork of [izerozlu/herdr-critters](https://github.com/izerozlu/herdr-critters). Added here:
+
+- **Fixed names**: each agent keeps one name across every theme. The name is
+  also a label on its terminal, so agents can find each other by it.
+- **Attention key**: `cmd-shift-a` jumps to the next agent that is blocked or done.
+- **Theme picker**: a list with color swatches, instead of cycling through themes.
+- **Matching Herdr themes**: picking a look in either place changes both (see `THEMING.md`).
+- **Restyled Spaces, tab bar and menus**: the side-panel buttons come from the
+  layout's panel stack, so add-on panels show up by themselves.
+- **Worktrees through [worktrunk](https://github.com/max-sixty/worktrunk)**:
+  new and open use `wt switch`, and Remove worktree uses `wt remove` (`cmd-shift-backspace`).
+- **Optional add-ons** in their own repos: herdr-tuicr, herdr-pr-comments,
+  herdr-dev-server (side panels) and theme packs.
 
 - One card per agent: a sprite, the agent's name with its status box (the
   theme's word, for example `IDLE`, `BUSY`, `HELP!`, `DONE` in retro) beside
@@ -18,22 +33,24 @@ Y2K or neon cyberpunk.
 - Cards are grouped by machine or by space: click `BY MACHINE` / `BY SPACE` in
   the panel header. Each group header shows `busy/total`. A space header uses
   the space's color from the Spaces list.
-- The corner badge moves: `z` when idle, a spinner when working, a blinking `!`
-  when blocked, a check when done. Working sprites bob.
+- The corner badge moves: a spinner when working, a blinking `!` when blocked,
+  a check when done. Idle has no badge. Working sprites bob.
 - Click a card to focus its pane. Hover to pin or unpin.
 - Click a group header to collapse the group to its header line. Hover a
   card and click `-` to make it one thin line; `+` opens it again.
 - Right-click a card for a menu: pin, collapse the card, collapse its group.
 - A narrow sidebar (under 160 px) shows only the sprite boxes.
 - The look is a theme (see [Themes](#themes)). The header button next to
-  `BY MACHINE` shows the active theme (`RETRO`); click it to switch to the next.
+  `BY MACHINE` shows the active theme (`RETRO`); click it to pick another.
 
 
 ## Install
 
 Ask your Herdr agent:
 
-> Read ~/.config/herdr-app/AGENTS.md, then add this layout: https://github.com/izerozlu/herdr-critters
+> Read ~/.config/herdr-app/AGENTS.md, then add this layout: https://github.com/jnhooper/herdr-critters
+
+Or clone it and run `./install.sh`. The worktree dialogs need worktrunk (`wt`).
 
 To use only the mod in a layout of your own, set that layout's agents block to
 `"content": { "mod": "herdr-critters" }`.
@@ -44,10 +61,12 @@ To use only the mod in a layout of your own, set that layout's agents block to
 ./install.sh
 ```
 
-This copies `mods/herdr-critters`, `mods/pane-collapse` and
-`mods/pane-collapse-menu` to `~/.config/herdr-app/mods/` and runs
-`herdr-app check` on each. It also adds the keys in `keys.json` to your
-`keys.json`, but never replaces a key you already bound. Herdr reloads the
+This copies every mod in `mods/` to `~/.config/herdr-app/mods/` and runs
+`herdr-app check` on each. It also copies the critters Herdr themes and the
+layout. The layout is copied only if you don't have one, so your own changes
+to it stay. It adds the keys in `keys.json` to your `keys.json`, but never
+replaces a key you already bound. A theme pack installed separately
+(`themes/<id>/`) is kept. Herdr reloads the
 mods live. Run it again after every change. A symlink does not work: Herdr
 does not load a mod's images through one.
 
@@ -190,7 +209,8 @@ The layout can hide a pane and keep its program running.
 - Right-click a pane, then pick **Collapse pane**. It acts on the pane you
   clicked, not the focused one. The card menu has **COLLAPSE PANE** too.
 - `cmd-shift-c` collapses the focused pane.
-- `cmd-shift-e` puts back the last pane you collapsed in this tab.
+- `cmd-shift-o` puts back the last pane you collapsed in this tab. Upstream
+  uses `cmd-shift-e`, which toggles Files here.
 - A collapsed agent stays in the sidebar as a collapsed card in its group.
   Click the card (or its `+`) to put the pane back. Its menu says
   **EXPAND PANE**.

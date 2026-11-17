@@ -1,7 +1,13 @@
 # Herdr critters
 
-The Agents sidebar as retro pixel cards. Every agent is a small named critter
-with its own sprite, standing in a pixel scene that changes with its status.
+A whole Herdr window themed as critters. The Agents sidebar is retro pixel cards, where every
+agent is a small named critter with its own sprite, standing in a pixel scene that changes
+with its status. The Spaces list, the tab bar and the menus are restyled to match. Each
+critters theme carries its own Herdr theme, so one switch changes the whole window. Worktrees
+are made and removed through worktrunk.
+
+This is a fork of izerozlu/herdr-critters. The agents sidebar and pane collapse come from
+there; the rest of the window is added here.
 
 ![Herdr critters](preview.png)
 
@@ -11,8 +17,10 @@ The mod fills the layout's `agents` block, top to bottom:
 
 - **Header** (38 px): a dither icon, `AGENTS` in Silkscreen 11 px `#6b6f82`, a
   `BY MACHINE` / `BY SPACE` toggle (Silkscreen 9 px, 1 px `#34364a` border), a
-  theme button beside it (same style, shows the theme label, `RETRO`; click
-  cycles to the next theme), and on the right `N BUSY` (cyan `#5ee6f2` when any
+  theme button beside it (same style, shows the theme label, `RETRO`). A click
+  opens the theme list just under it: one 26 px row per theme with a swatch of
+  its colors, its name in its own font, dark or light, and a check on the shown
+  one. On the right is `N BUSY` (cyan `#5ee6f2` when any
   agent works, else gray). The left group shrinks first, the busy count never
   gets cut.
 - **Group headers** (30 px): a 12 px chevron (down when open, right when
@@ -38,7 +46,19 @@ Scenes by machine: this machine is `dusk` (purple), other machines take `den`
 
 ## How it behaves
 
-- **Names**: each agent gets a random name from a list of 30 (pixel, byte,
+- **Fixed names**: each agent has one name, whatever the look, drawn from
+  every theme's names. A newcomer takes its old retro name when that name is
+  free, else a random free one. The names are shared state (`critters.names`,
+  address to name), and each name is also put on the agent's terminal as the
+  label `herdr.critter`, so agents can find each other (`hc ls --label`).
+- **Sprites**: the critter drawn for an agent is its own name when the theme
+  has art for it, else the critter it had in this theme before (while free),
+  else a random free one, else one borrowed from another theme. A theme with
+  `castNames` shows the critter's name on the card instead of the fixed name.
+  It also labels the terminal `herdr.critter.shown` and shares the shown names
+  (`critters.shown`).
+- **Theme names** (upstream's original scheme, still the source of each
+  theme's list): each agent gets a random name from a list of 30 (pixel, byte,
   nova, rook, ziggy, mochi, bolt, echo, juno, kiwi, luma, miso, nimbus, onyx,
   pepper, quill, rusty, sprout, tango, umbra, vega, waffle, yeti, zephyr, comet,
   dusty, fable, gizmo, hopper, ivory). The `edo` theme has its own 30 (onigiri,
@@ -49,7 +69,8 @@ Scenes by machine: this machine is `dusk` (purple), other machines take `den`
   `names` for retro, `names.<id>` for other themes). Past 30 agents a name
   repeats with a number (`pixel 2`) and shares a sprite.
 - **Status**, on the status box, sprite, scene and corner badge:
-  - idle: `IDLE` gray, eyes shut, badge `z`/`Z` blinking.
+  - idle: `IDLE` gray, eyes shut, no corner badge (a sprite draws its own
+    sleepiness).
   - working: `BUSY` cyan, a yellow bolt, badge a 4-frame spinner, the sprite
     bobs 3 px.
   - blocked (and error): `HELP!` red, red eyes, a red `!` and a sweat drop,
@@ -78,12 +99,60 @@ Scenes by machine: this machine is `dusk` (purple), other machines take `den`
   is shared state too (`herdr-critters.theme`, a theme id; unknown or missing
   means `retro`).
 - The mod sets the agent order (`setAgentOrder`) to the order it shows.
+- **Attention key** (`herdr-critters.attention`, `cmd-shift-a`): focuses the
+  next agent that is waiting on you (blocked), else the next that is done, in
+  the list's order, starting after the one shown now. Pressed again, it moves
+  on.
+
+## The rest of the window
+
+- **Spaces** (`critters-spaces`, cloned from Herdr's `spaces` 0.1.14): spaces
+  with stable colored avatars, worktrees under their checkout, grouped by
+  machine when more than one is known. After a space's name it shows the
+  branch and ahead/behind, but only where unusual. Click to switch,
+  right-click for the menu, drag to reorder. It also does the work for
+  removing a worktree (`wt-remove-worker.js`).
+- **Tabs** (`critters-tabs`, from `tabs` 0.1.14): the tab row with + (the
+  critters new menu), and the side-panel buttons on the right. The buttons
+  are the layout's `panel-body` stack, one per child in order. Each button is
+  drawn from its mod's `mod.json` `"panel": { "label", "icon", "dot" }`.
+  `dot` names a shared key the mod sets to a theme color name, or null.
+  Herdr's Files and Changes are known by name, and they follow the person's
+  panel choice (shared `workspace.panels`). The open panel is remembered per
+  space. Keys: `critters-tabs.<panel id or mod>` toggles a panel, and
+  `critters-tabs.remove` removes the focused space's worktree.
+- **Menus** (`critters-menu`, `critters-new-menu`, from `menu` and `new-menu`
+  0.1.14): Herdr's items in the critters look. New worktree and Open worktree
+  open `critters-worktree`; Remove worktree opens `wt-remove`.
+- **Worktrees** (`critters-worktree`, from `worktree` 0.1.15): New and Open
+  run `wt switch [--create] <branch> --base @ --no-cd --format json` through
+  the login shell, then open the returned path as a space (or select the space
+  already there). It never passes `--yes`, so unapproved worktrunk hooks make
+  it fail with worktrunk's message instead of running them.
+- **Remove worktree** (`wt-remove`): a dialog. Uncommitted `.md` files at the
+  worktree's root are notes and go with it. Any other uncommitted change is
+  listed, and only Remove anyway removes it then. `wt remove` runs the
+  worktrunk remove hooks and deletes the branch if it's merged. A dev server
+  running from the worktree is stopped first (shared `devserver.state`, when
+  the dev-server mod is installed). Claude sessions working in the worktree
+  are quit with Ctrl-C twice, keeping their conversation. Then the space
+  closes, and a toast says how it went.
 
 ## Built from
 
-- **Layout** `layouts/critters.json`: the shipped `main` layout with the
-  `agents` block set to `{ "mod": "herdr-critters" }`, plus the pane collapse
-  parts (see [Pane collapse](#pane-collapse)).
+- **Layout** `layouts/critters.json`: a 272 px sidebar (brand,
+  `critters-spaces` over `herdr-critters`, footer), then a column of
+  `critters-tabs` (42 px), the panes beside a 627 px side panel (`panel` >
+  `panel-body` stack of Files and Changes) and the status bar. Its root theme
+  is `critters-retro`. Pane collapse parts too (see
+  [Pane collapse](#pane-collapse)).
+- **Mods** `critters-spaces`, `critters-tabs`, `critters-menu`,
+  `critters-new-menu`, `critters-worktree`, `wt-remove` (see The rest of the
+  window). The clones keep `cloned_from` in `mod.json`.
+- **Herdr themes** `themes/critters-<id>.json`, made from each theme's
+  `herdr` section by `tools/build-herdr-themes.mjs`. `themes/sync.js` keeps
+  the look and Herdr's theme in step (see `THEMING.md`) and publishes the look
+  as shared `critters.look` for other mods.
 - **Mod** `mods/herdr-critters/`: `main.js` (one `View`, theme-agnostic),
   `mod.json` (`place: none`), `themes/` (registry `index.js` and one folder per
   theme with `theme.js` and `art/`), `fonts/`, `collapse.js` (see
@@ -96,7 +165,9 @@ Scenes by machine: this machine is `dusk` (purple), other machines take `den`
 - **Shipped mods it uses**: the `pin`, `pin-off`, `plus`, `minus`,
   `chevron-down` and `chevron-right` icons of
   `workspace-chrome`.
-- **Programs, network, files**: one program. To collapse a pane,
+- **Programs** (the rest of the window): `git`, `gh` (merged pull requests,
+  in Spaces), `wt` (worktrunk), `hc`.
+- **Programs, network, files** (the agents sidebar): one program. To collapse a pane,
   `collapse.js` runs `hc connect` once to read the tab's split tree (read
   only). It does not reach the network or read files outside its own folder.
 - **Art**: SVGs in `mods/herdr-critters/themes/<id>/art/`: one sprite
@@ -131,10 +202,17 @@ A theme is `themes/<id>/theme.js`, a default export of one object:
   `remoteScenes`.
 - `status`: `working`, `blocked`, `done`, `idle`, each `{ word, color }`.
 - `names`: the 30 agent names; each needs its sprites in `art/`.
+- Optional `castNames` (cards show the critter's name), `sprite: { size,
+  ground }` (sprite width as a share of the box, default 0.66, and where the
+  feet land as a share of the box height above the bottom, default 7/30), and
+  `herdr: { ansi, colors? }` (the matching Herdr theme).
 
-`themes/index.js` exports `THEMES` (cycle order), `DEFAULT_THEME` (`retro`) and
+`themes/index.js` exports `THEMES` (list order), `DEFAULT_THEME` (`retro`) and
 `themeById(id)` (unknown id gives the default). To add a theme: write
-`theme.js`, add the art, import it in `index.js` and add it to `THEMES`.
+`theme.js`, add the art, import it in `index.js` and add it to `THEMES`. A
+theme pack installed on its own goes in `OPTIONAL` instead. It is loaded with
+a dynamic import when its folder is there and skipped when it isn't
+(`crawler`, from the separate herdr-crawler repo).
 
 ## Extras
 
@@ -182,8 +260,9 @@ the program keeps running. A record of where the pane sat lets it come back.
   no swap), `terminal.keep {place}`, wait (up to 2 s, 50 ms steps) for the new
   pane, then `pane.focus` it and `pane.swap` back.
 - Keys (section `layout:critters` in `keys.json`): `cmd-shift-c` runs
-  `pane-collapse.collapse` (the focused pane); `cmd-shift-e` runs
-  `pane-collapse.expand` (the newest collapsed pane of the shown tab). The
+  `pane-collapse.collapse` (the focused pane); `cmd-shift-o` runs
+  `pane-collapse.expand` (the newest collapsed pane of the shown tab).
+  Upstream uses `cmd-shift-e`, which toggles Files here. The
   `pane-collapse` mod gets them through `nextCommand()`.
 - A chip click runs `expand` for its record.
 - Critters cards: a parked terminal leaves `agents()`. `herdr-critters` adds
@@ -219,3 +298,18 @@ the program keeps running. A record of where the pane sat lets it come back.
   group of panes, the pane comes back inside that group.
 - A parked terminal has core keep off: if herdr-core restarts, it is lost.
 - The menu is a copy; Herdr updates don't change it.
+
+## Watch out
+
+- A new mod folder needs its `mod.json` (`"place": "none"`) before its
+  `main.js`. Otherwise Herdr places the mod in the window on its own. The
+  install script copies `mod.json` first for this reason.
+- A layout block can show a terminal but a mod can't draw one. Panels that
+  show a program (tuicr, a dev server) put a header mod over a terminal block
+  and point that block at the program's background terminal (`layout.set`).
+- The `changes` panel here is Herdr's own Changes. The herdr-tuicr repo
+  replaces it with tuicr: its README gives the stack child.
+- Mods can't import across folders: `collapse.js` is copied in three mods and
+  `critters-look.js` is copied into add-on mods. Keep the copies equal.
+- Optional add-ons, each its own repo: herdr-tuicr, herdr-pr-comments,
+  herdr-dev-server (side panels) and herdr-crawler (a theme pack).
